@@ -5,7 +5,10 @@
     {"name": "ST(W)", "title": "", "shortName": "ST(W)"},
     {"name": "ST(A)", "title": "", "shortName": "ST(A)"},
     {"name": "ST(S)", "title": "", "shortName": "ST(S)"},
-    {"name": "ST(D)", "title": "", "shortName": "ST(D)"}
+    {"name": "ST(D)", "title": "", "shortName": "ST(D)"},
+    {"name": "Open Mission Control", "title": "", "shortName": "MCTL"},
+    {"name": "Open Launchpad", "title": "", "shortName": "LPAD"},
+    {"name": "View current windows of front app", "title": "", "shortName": "CURA"}
   ], 
   "layouts": {
     "labels":[

@@ -95,36 +95,106 @@ void led_set_user(uint8_t usb_led)
 #endif
 }
 
+enum macos_consumer_usages {
+    _AC_SHOW_ALL_WINDOWS = 0x29F,  // mapped to KC_MCON
+    _AC_SHOW_ALL_APPS    = 0x2A0   // mapped to KC_LPAD
+};
+
+static uint32_t scan_timer = 1000; // 1000ms = 1 second
+
+static uint32_t df2_key_timer = 0;
+static bool df2_key_pressed = false;
+
+static uint32_t df0_key_timer = 0;
+static bool df0_key_pressed = false;
+
+// Scan delay for macos/win layout change event
+void matrix_scan_user(void) {
+    if (df0_key_pressed && timer_elapsed(df0_key_timer) >= scan_timer) {
+        set_single_persistent_default_layer(0);
+        df0_key_pressed = false; // Reset the state
+    }
+
+    if (df2_key_pressed && timer_elapsed(df2_key_timer) >= scan_timer) {
+        set_single_persistent_default_layer(2);
+        df2_key_pressed = false; // Reset the state
+    }
+}
+
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     static uint8_t mod_keys_registered;
     uint8_t pressed_mods = get_mods();
     switch (keycode) {
-        case 0x5c00: // via/vial reset to bootloader
-            if (record->event.pressed) {
-                clear_keyboard();
-                volatile uint32_t *uf2bl_backup_reg = (uint32_t*)0x20004000;
-            	*uf2bl_backup_reg = 0x9d5bfc2bUL;
-            	NVIC_SystemReset();
-            }
-            return false;
-        // 0x5f8f for Alt+Esc=f4 and RShift+Esc=~
-        case 0x5F8F:
-            if (record->event.pressed) {
-                if ((pressed_mods & MOD_BIT(KC_RSHIFT)) && (~pressed_mods & MOD_BIT(KC_LCTRL))) {
-                    mod_keys_registered = KC_GRV;
-                } else if (pressed_mods & MOD_BIT(KC_LALT)) {
-                    mod_keys_registered = KC_F4;
-                } else {
-                    mod_keys_registered = KC_ESC;
-                }
-                register_code(mod_keys_registered);
-                send_keyboard_report();
+    case 0x5c00: // via/vial reset to bootloader
+        if (record->event.pressed) {
+            clear_keyboard();
+            volatile uint32_t *uf2bl_backup_reg = (uint32_t*)0x20004000;
+            *uf2bl_backup_reg = 0x9d5bfc2bUL;
+            NVIC_SystemReset();
+        }
+        return false;
+
+    // 0x5f8f for Alt+Esc=f4 and RShift+Esc=~
+    case 0x5F8F:
+        if (record->event.pressed) {
+            if ((pressed_mods & MOD_BIT(KC_RSHIFT)) && (~pressed_mods & MOD_BIT(KC_LCTRL))) {
+                mod_keys_registered = KC_GRV;
+            } else if (pressed_mods & MOD_BIT(KC_LALT)) {
+                mod_keys_registered = KC_F4;
             } else {
-                unregister_code(mod_keys_registered);
-                send_keyboard_report();
+                mod_keys_registered = KC_ESC;
             }
-            return false;
-        default:
+            register_code(mod_keys_registered);
+            send_keyboard_report();
+        } else {
+            unregister_code(mod_keys_registered);
+            send_keyboard_report();
+        }
+        return false;
+
+    case DF(2):
+        if (record->event.pressed) {
+            df2_key_pressed = true;
+            df2_key_timer = timer_read32(); // Start the timer
+        } else { // Key released
+            df2_key_pressed = false;
+            // No immediate action on release, the delay logic handles it
+        }
+        return false; // Consume the key event
+
+    case DF(0):
+        if (record->event.pressed) {
+            df0_key_pressed = true;
+            df0_key_timer = timer_read32(); // Start the timer
+        } else { // Key released
+            df0_key_pressed = false;
+            // No immediate action on release, the delay logic handles it
+        }
+        return false;
+
+    case USER04: // Map to KC_MCTL
+        if (record->event.pressed) {
+            host_consumer_send(_AC_SHOW_ALL_WINDOWS);
+        } else {
+            host_consumer_send(0);
+        }
+        return false;
+
+    case USER05: // Map to KC_LPAD
+        if (record->event.pressed) {
+            host_consumer_send(_AC_SHOW_ALL_APPS);
+        } else {
+            host_consumer_send(0);
+        }
+        return false;
+
+    case USER06: // Map to KC_CURA --> show all windows of the front app
+        if (record->event.pressed) {
+            SEND_STRING(SS_LCTL(SS_TAP(X_DOWN)));
+        }
+        return false;
+
+	default:
             return true; // Process all other keycodes normally
     }
 }
@@ -168,7 +238,7 @@ void user_config_update(void)
     static const uint8_t indicator_hue_preset[8] = {0, 21, 42, 85, 127, 170, 212, 255};
     #ifdef INDICATOR_VAL
     static uint8_t val = INDICATOR_VAL;
-    #else 
+    #else
     static uint8_t val = 255;
     #endif
 
